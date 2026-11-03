@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qorights Managements | 3D Driving Simulator & Garage</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; user-select: none; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #050811; color: #fff; }
+
+        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+
+        /* Garage UI Overlay */
+        #garage-ui {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, rgba(15, 23, 42, 0.85) 0%, rgba(5, 8, 17, 0.95) 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2.5rem 4rem;
+            z-index: 20;
+            transition: opacity 0.5s ease;
+        }
+
+        .garage-header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #818cf8, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+        .garage-header p { color: #94a3b8; font-size: 1rem; margin-top: 0.25rem; }
+
+        .garage-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+        }
+
+        .car-selector {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .car-card {
+            background: rgba(30, 41, 59, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 1.25rem 1.75rem;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(12px);
+            width: 220px;
+        }
+
+        .car-card:hover { transform: translateY(-5px); border-color: rgba(99, 102, 241, 0.5); }
+        .car-card.active { border-color: #6366f1; background: rgba(99, 102, 241, 0.15); box-shadow: 0 0 30px rgba(99, 102, 241, 0.3); }
+
+        .car-card h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.25rem; }
+        .car-card span { font-size: 0.85rem; color: #94a3b8; }
+
+        .btn-launch {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            border: none;
+            padding: 1.25rem 3rem;
+            font-size: 1.15rem;
+            font-weight: 700;
+            border-radius: 16px;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+            transition: all 0.3s;
+        }
+        .btn-launch:hover { transform: translateY(-2px); box-shadow: 0 15px 40px rgba(99, 102, 241, 0.6); }
+
+        /* Driving HUD */
+        #hud {
+            position: absolute;
+            top: 25px; left: 30px;
+            display: none;
+            flex-direction: column;
+            gap: 0.5rem;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-card {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 1rem 1.5rem;
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+
+        .speedometer { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; color: #fff; }
+        .speedometer span { font-size: 1rem; color: #94a3b8; font-weight: 600; margin-left: 0.25rem; }
+
+        #controls-hint {
+            position: absolute;
+            bottom: 25px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 0.85rem 1.75rem;
+            border-radius: 30px;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            display: none;
+            pointer-events: none;
+            z-index: 10;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- GARAGE SHOWROOM UI -->
+    <div id="garage-ui">
+        <div class="garage-header">
+            <h1>QORIGHTS GARAGE</h1>
+            <p>Select your vehicle and customize your drive</p>
+        </div>
+        <div class="garage-footer">
+            <div class="car-selector">
+                <div class="car-card active" onclick="selectCar(0)">
+                    <h3>Apex GT</h3>
+                    <span>Balanced Sports Coupe</span>
+                </div>
+                <div class="car-card" onclick="selectCar(1)">
+                    <h3>Vortex X</h3>
+                    <span>High-Speed Hypercar</span>
+                </div>
+            </div>
+            <button class="btn-launch" onclick="launchGame()">Drive Now ⚡</button>
+        </div>
+    </div>
+
+    <!-- DRIVING HUD -->
+    <div id="hud">
+        <div class="hud-card">
+            <div class="speedometer"><span id="speedDisplay">0</span><span>KM/H</span></div>
+        </div>
+    </div>
+
+    <div id="controls-hint">
+        Use <b>W A S D</b> or <b>Arrow Keys</b> to Drive | <b>Spacebar</b> to Brake | <b>C</b> to Switch Camera
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <!-- Three.js Library CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x060913);
+        scene.fog = new THREE.FogExp2(0x060913, 0.012);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        container.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(100, 200, 100);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 500;
+        const d = 100;
+        dirLight.shadow.camera.left = -d;
+        dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d;
+        dirLight.shadow.camera.bottom = -d;
+        scene.add(dirLight);
+
+        // Environment / City Generation
+        const groundGeo = new THREE.PlaneGeometry(2000, 2000);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Road Grid
+        const gridHelper = new THREE.GridHelper(2000, 100, 0x3b82f6, 0x1e293b);
+        gridHelper.position.y = 0.02;
+        scene.add(gridHelper);
+
+        // Detailed Skyscrapers
+        const buildingMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.8 });
+        for (let i = 0; i < 120; i++) {
+            const h = 40 + Math.random() * 120;
+            const w = 15 + Math.random() * 20;
+            const d = 15 + Math.random() * 20;
+            const bGeo = new THREE.BoxGeometry(w, h, d);
+            const building = new THREE.Mesh(bGeo, buildingMat);
+            
+            let x, z;
+            do {
+                x = (Math.random() - 0.5) * 1600;
+                z = (Math.random() - 0.5) * 1600;
+            } while (Math.abs(x) < 50 && Math.abs(z) < 50);
+
+            building.position.set(x, h / 2, z);
+            building.castShadow = true;
+            building.receiveShadow = true;
+            scene.add(building);
+        }
+
+        // Car Creation Function (Realistic 3D Geometry)
+        function createDetailedCar(colorHex) {
+            const carGroup = new THREE.Group();
+
+            // Main Body
+            const bodyGeo = new THREE.BoxGeometry(2.1, 0.7, 4.4);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.2, metalness: 0.9 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.55;
+            body.castShadow = true;
+            carGroup.add(body);
+
+            // Cabin / Roof
+            const cabinGeo = new THREE.BoxGeometry(1.7, 0.55, 2.2);
+            const cabinMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.1, metalness: 0.9 });
+            const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+            cabin.position.set(0, 1.05, -0.2);
+            cabin.castShadow = true;
+            carGroup.add(cabin);
+
+            // Wheels
+            const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 32);
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
+            const rimMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.9, roughness: 0.1 });
+
+            const wheelPositions = [
+                [-1.1, 0.38, 1.4],
+                [1.1, 0.38, 1.4],
+                [-1.1, 0.38, -1.4],
+                [1.1, 0.38, -1.4]
+            ];
+
+            const wheels = [];
+            wheelPositions.forEach(pos => {
+                const wheelGroup = new THREE.Group();
+                const tire = new THREE.Mesh(wheelGeo, wheelMat);
+                tire.rotation.z = Math.PI / 2;
+                tire.castShadow = true;
+                wheelGroup.add(tire);
+
+                const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.32, 16), rimMat);
+                rim.rotation.z = Math.PI / 2;
+                wheelGroup.add(rim);
+
+                wheelGroup.position.set(...pos);
+                carGroup.add(wheelGroup);
+                wheels.push(wheelGroup);
+            });
+
+            carGroup.userData = { wheels };
+            return carGroup;
+        }
+
+        // Garage Setup
+        let selectedCarIndex = 0;
+        const carColors = [0x6366f1, 0xec4899];
+        const garageCars = [
+            createDetailedCar(carColors[0]),
+            createDetailedCar(carColors[1])
+        ];
+
+        garageCars.forEach((car, idx) => {
+            car.position.set((idx - 0.5) * 8, 0, 0);
+            scene.add(car);
+        });
+
+        function selectCar(index) {
+            selectedCarIndex = index;
+            document.querySelectorAll('.car-card').forEach((card, idx) => {
+                card.classList.toggle('active', idx === index);
+            });
+        }
+
+        let gameState = 'GARAGE';
+        let activeCar;
+        let speed = 0, steering = 0, carAngle = 0;
+        let cameraMode = 0; // 0: Chase, 1: Hood, 2: Overhead
+
+        function launchGame() {
+            gameState = 'DRIVING';
+            document.getElementById('garage-ui').style.opacity = '0';
+            setTimeout(() => document.getElementById('garage-ui').style.display = 'none', 500);
+            document.getElementById('hud').style.display = 'flex';
+            document.getElementById('controls-hint').style.display = 'block';
+
+            // Remove garage cars and spawn chosen active car at origin
+            garageCars.forEach(c => scene.remove(c));
+            activeCar = createDetailedCar(carColors[selectedCarIndex]);
+            activeCar.position.set(0, 0, 0);
+            scene.add(activeCar);
+        }
+
+        // Controls State
+        const keys = { forward: false, backward: false, left: false, right: false, brake: false };
+        window.addEventListener('keydown', (e) => handleKey(e, true));
+        window.addEventListener('keyup', (e) => handleKey(e, false));
+
+        function handleKey(e, isDown) {
+            if (gameState !== 'DRIVING') return;
+            switch(e.key.toLowerCase()) {
+                case 'w': case 'arrowup': keys.forward = isDown; break;
+                case 's': case 'arrowdown': keys.backward = isDown; break;
+                case 'a': case 'arrowleft': keys.left = isDown; break;
+                case 'd': case 'arrowright': keys.right = isDown; break;
+                case ' ': keys.brake = isDown; break;
+                case 'c':
+                    if (isDown) cameraMode = (cameraMode + 1) % 3;
+                    break;
+            }
+        }
+
+        // Animation & Game Loop
+        let clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            if (gameState === 'GARAGE') {
+                // Rotate cars in garage showroom
+                garageCars.forEach((car, idx) => {
+                    car.rotation.y += 0.005;
+                });
+                camera.position.set(Math.sin(Date.now() * 0.001) * 12, 4, Math.cos(Date.now() * 0.001) * 12);
+                camera.lookAt(0, 1, 0);
+            } else if (gameState === 'DRIVING') {
+                // Driving Physics
+                if (keys.forward) speed += 0.02;
+                else if (keys.backward) speed -= 0.015;
+                else if (keys.brake) speed *= 0.90;
+                else speed *= 0.985;
+
+                speed = Math.max(-0.6, Math.min(1.8, speed));
+
+                if (Math.abs(speed) > 0.02) {
+                    const turnRate = 0.035 * (speed > 0 ? 1 : -1);
+                    if (keys.left) steering += turnRate;
+                    else if (keys.right) steering -= turnRate;
+                    else steering *= 0.82;
+                } else {
+                    steering *= 0.82;
+                }
+                steering = Math.max(-0.7, Math.min(0.7, steering));
+
+                carAngle += steering * (speed * 0.9);
+                activeCar.rotation.y = carAngle;
+
+                activeCar.position.x += Math.sin(carAngle) * speed;
+                activeCar.position.z += Math.cos(carAngle) * speed;
+
+                // Spin wheels
+                activeCar.userData.wheels.forEach(w => w.rotation.x += speed * 3);
+
+                // Camera follow modes
+                if (cameraMode === 0) {
+                    // Chase Cam
+                    const targetX = activeCar.position.x - Math.sin(carAngle) * 12;
+                    const targetZ = activeCar.position.z - Math.cos(carAngle) * 12;
+                    camera.position.x += (targetX - camera.position.x) * 0.15;
+                    camera.position.z += (targetZ - camera.position.z) * 0.15;
+                    camera.position.y = activeCar.position.y + 4.5;
+                    camera.lookAt(activeCar.position.x, activeCar.position.y + 1, activeCar.position.z);
+                } else if (cameraMode === 1) {
+                    // Hood Cam
+                    camera.position.x = activeCar.position.x + Math.sin(carAngle) * 1.2;
+                    camera.position.z = activeCar.position.z + Math.cos(carAngle) * 1.2;
+                    camera.position.y = activeCar.position.y + 1.2;
+                    camera.lookAt(
+                        activeCar.position.x + Math.sin(carAngle) * 20,
+                        activeCar.position.y + 0.5,
+                        activeCar.position.z + Math.cos(carAngle) * 20
+                    );
+                } else {
+                    // Overhead Cam
+                    camera.position.x = activeCar.position.x;
+                    camera.position.z = activeCar.position.z - 2;
+                    camera.position.y = activeCar.position.y + 25;
+                    camera.lookAt(activeCar.position.x, activeCar.position.y, activeCar.position.z);
+                }
+
+                // Update Speedometer
+                document.getElementById('speedDisplay').innerText = Math.round(Math.abs(speed) * 110);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
